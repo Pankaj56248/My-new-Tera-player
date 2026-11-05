@@ -2,15 +2,19 @@ import os
 import re
 import urllib.parse
 import asyncio
+from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 from resolver import resolve_terabox_link
 
-# Aapka Cloudflare Worker URL
+# Environment variables
 MINI_APP_URL = "https://test-stream-player.supershort80.workers.dev/"
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable set nahi hai!")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -51,14 +55,31 @@ async def handle_link(message: types.Message):
 
     await waiting_msg.edit_text(
         f"🎬 **{title}**\n📡 Source: `{source}`\n\nNeeche button par click karke stream karein:",
-        reply_markup=btn,
+        reply_markup=keyboard if 'keyboard' in locals() else btn,
         parse_mode="Markdown"
     )
 
+# --- Render ke liye Dummy Web Server taaki Port Detect ho jaye ---
+async def handle_health_check(request):
+    return web.Response(text="Bot is running fine!")
+
+async def start_dummy_server():
+    app = web.Application()
+    app.router.add_get("/", handle_health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"Health check server active on port {port}")
+
 async def main():
-    print("Bot Render par successfully start ho chuka hai...")
-    await dp.start_polling(bot)
+    print("Bot starting with web port...")
+    # Port aur Telegram bot dono ek sath chalenge
+    await asyncio.gather(
+        start_dummy_server(),
+        dp.start_polling(bot)
+    )
 
 if __name__ == "__main__":
     asyncio.run(main())
-  
