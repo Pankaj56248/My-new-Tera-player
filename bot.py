@@ -19,12 +19,12 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Sabhi possible TeraBox domains
-TERA_REGEX = r"https?:\/\/(?:[a-zA-Z0-9\-]+\.)?(?:terabox\.com|1024tera\.com|4funbox\.com|teraboxapp\.com|terasharelink\.com|mirrobox\.com|nephobox\.com|momerybox\.com)\/[^\s]+"
+# Sabhi naye aur purane TeraBox domains ka comprehensive pattern
+# Isme terabox, 1024tera, teraboxapp, tibibox, 4funbox, freeterabox sab shamil hain
+TERA_REGEX = r"https?:\/\/(?:[a-zA-Z0-9\-]+\.)?(?:terabox[a-zA-Z0-9\-]*|1024tera[a-zA-Z0-9\-]*|4funbox[a-zA-Z0-9\-]*|mirrobox[a-zA-Z0-9\-]*|nephobox[a-zA-Z0-9\-]*|momerybox[a-zA-Z0-9\-]*|tibibox[a-zA-Z0-9\-]*|freeterabox[a-zA-Z0-9\-]*)\.[a-zA-Z]{2,}\/[^\s]+"
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
-    print(f"[/start command mila user {message.from_user.id} se]")
     await message.answer("👋 Testing Bot Active hai!\n\nKoi bhi TeraBox video link bhejo, main use stream karne ka button dunga.")
 
 @dp.message(F.text)
@@ -32,13 +32,21 @@ async def handle_link(message: types.Message):
     user_text = message.text.strip()
     print(f"[Incoming Message]: {user_text}")
 
-    match = re.search(TERA_REGEX, user_text)
+    # Step 1: Specific TeraBox Regex match check karein
+    match = re.search(TERA_REGEX, user_text, re.IGNORECASE)
+    
+    # Step 2: Fallback - Agar user ne koi bhi valid link bheji hai jisme 'tera' ya 'box' word hai
     if not match:
-        print("[No TeraBox URL matched in text]")
-        await message.reply("⚠️ Yeh valid TeraBox link nahi lag rahi hai. Kripya check karein.")
-        return
+        generic_url_match = re.search(r"https?:\/\/[^\s]+", user_text)
+        if generic_url_match and any(k in generic_url_match.group(0).lower() for k in ["tera", "box", "1024", "share"]):
+            terabox_url = generic_url_match.group(0)
+        else:
+            print("[Rejected: Link format match nahi hua]")
+            await message.reply("⚠️ Yeh valid TeraBox link nahi lag rahi hai. Kripya check karein.")
+            return
+    else:
+        terabox_url = match.group(0)
 
-    terabox_url = match.group(0)
     print(f"[Resolving Link]: {terabox_url}")
     waiting_msg = await message.reply("⏳ Stream link nikaali ja rahi hai, wait karein...")
 
@@ -91,11 +99,7 @@ async def start_dummy_server():
 
 async def main():
     print("Conflict clear kar rahe hain aur bot start kar rahe hain...")
-    
-    # CRITICAL: Purane hung conflicts aur pending messages ko flush karna
     await bot.delete_webhook(drop_pending_updates=True)
-
-    # Server aur Polling dono ek sath start honge
     await asyncio.gather(
         start_dummy_server(),
         dp.start_polling(bot, drop_pending_updates=True)
@@ -103,4 +107,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-        
+            
