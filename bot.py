@@ -7,54 +7,64 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-# Aapka Cloudflare Worker URL
-MINI_APP_URL = "https://test-stream-player.supershort80.workers.dev/"
+MINI_APP_URL = "https://test-stream-player.supershort80.workers.dev"
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN environment variable set nahi hai!")
+    raise ValueError("BOT_TOKEN missing!")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-TERA_REGEX = r"https?:\/\/[^\s]+"
+URL_REGEX = r"https?:\/\/[^\s]+"
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
-    await message.answer("👋 Testing Bot Active hai!\n\nKoi bhi TeraBox link bhejo, seedha Mini App me chalega.")
+    await message.answer("👋 Bot online hai! Koi bhi TeraBox link bhejo.")
 
 @dp.message(F.text)
 async def handle_link(message: types.Message):
-    user_text = message.text.strip()
-    match = re.search(TERA_REGEX, user_text)
+    match = re.search(URL_REGEX, message.text.strip())
     if not match:
+        await message.reply("⚠️ Kripya valid link bhejein.")
         return
 
     terabox_url = match.group(0)
 
-    # TeraBox link ko seedha Mini App me bhej do (Resolution Mini App khud karega)
-    encoded_url = urllib.parse.quote(terabox_url, safe='')
-    final_url = f"{MINI_APP_URL}?tera_url={encoded_url}"
+    # Clean encoded URL parameter
+    safe_param = urllib.parse.quote(terabox_url, safe='')
+    final_url = f"{MINI_APP_URL}/?tera_url={safe_param}"
 
-    btn = InlineKeyboardMarkup(
+    keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="▶ Play Video (Instant)", web_app=WebAppInfo(url=final_url))]
+            [
+                InlineKeyboardButton(
+                    text="▶ Watch in Telegram (Mini App)", 
+                    web_app=WebAppInfo(url=final_url)
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Watch in Browser (Fallback)", 
+                    url=final_url
+                )
+            ]
         ]
     )
 
     await message.reply(
-        "🎬 **Video Link Ready!**\n\nNeeche button par tap karein, Mini App bina kisi server error ke link resolve karke video chala dega:",
-        reply_markup=btn,
+        "🎬 **Stream Ready!**\n\nNeeche diye gaye button par tap karein:",
+        reply_markup=keyboard,
         parse_mode="Markdown"
     )
 
-# Render dummy port taaki service 24/7 live rahe
-async def handle_health_check(request):
-    return web.Response(text="Bot is running!")
+# Render dummy port
+async def handle_health(request):
+    return web.Response(text="Bot OK")
 
-async def start_dummy_server():
+async def start_dummy():
     app = web.Application()
-    app.router.add_get("/", handle_health_check)
+    app.router.add_get("/", handle_health)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 8080))
@@ -63,10 +73,7 @@ async def start_dummy_server():
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
-    await asyncio.gather(
-        start_dummy_server(),
-        dp.start_polling(bot, drop_pending_updates=True)
-    )
+    await asyncio.gather(start_dummy(), dp.start_polling(bot, drop_pending_updates=True))
 
 if __name__ == "__main__":
     asyncio.run(main())
